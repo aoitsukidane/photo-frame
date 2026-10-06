@@ -5,28 +5,40 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#000000" />
   <title>フォトフレームカメラ</title>
+
   <style>
     * { box-sizing: border-box; }
+
     html, body {
       margin: 0;
       width: 100%;
       height: 100%;
-      overflow: hidden;
       background: #000;
+      overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button {
+      font: inherit;
     }
 
     .app {
       position: fixed;
       inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       background: #000;
     }
 
+    /* 元フレーム1080×1400の比率を固定 */
     .stage {
-      position: absolute;
-      inset: 0;
+      position: relative;
+      width: min(100vw, calc(100vh * 0.77142857));
+      aspect-ratio: 1080 / 1400;
+      max-height: 100vh;
       overflow: hidden;
-      background: #000;
+      background: #111;
     }
 
     #camera {
@@ -35,7 +47,6 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
-      transform: scaleX(1);
     }
 
     #camera.mirror {
@@ -45,49 +56,50 @@
     #frame {
       position: absolute;
       inset: 0;
+      z-index: 2;
       width: 100%;
       height: 100%;
-      object-fit: fill;
+      object-fit: contain;
       pointer-events: none;
-      z-index: 2;
     }
 
-    .ui {
+    .controls {
       position: absolute;
       left: 0;
       right: 0;
       bottom: 0;
-      z-index: 3;
+      z-index: 4;
       display: flex;
       justify-content: center;
       align-items: center;
-      gap: 28px;
+      gap: 26px;
       padding: 18px 18px calc(18px + env(safe-area-inset-bottom));
-      background: linear-gradient(transparent, rgba(0,0,0,.55));
+      background: linear-gradient(transparent, rgba(0, 0, 0, .68));
     }
 
-    button {
+    .circle-btn {
       appearance: none;
       -webkit-appearance: none;
       border: 0;
-      color: #fff;
-      background: rgba(0,0,0,.55);
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
-      border-radius: 999px;
-      font-size: 14px;
-      font-weight: 700;
       cursor: pointer;
+      color: #fff;
+      background: rgba(0, 0, 0, .62);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
     }
 
-    #switchBtn {
-      width: 54px;
-      height: 54px;
+    #switchBtn,
+    #framesBtn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      font-size: 22px;
     }
 
     #shotBtn {
-      width: 76px;
-      height: 76px;
+      width: 78px;
+      height: 78px;
+      border-radius: 50%;
       background: #fff;
       border: 6px solid rgba(255,255,255,.45);
       box-shadow: inset 0 0 0 3px #000;
@@ -97,20 +109,58 @@
       transform: scale(.95);
     }
 
-    #downloadLink {
+    .frame-picker {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 112px;
+      z-index: 5;
       display: none;
+      gap: 10px;
+      justify-content: center;
+      align-items: center;
+      padding: 10px;
+      border-radius: 18px;
+      background: rgba(0,0,0,.72);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    .frame-picker.open {
+      display: flex;
+    }
+
+    .frame-choice {
+      width: 72px;
+      height: 92px;
+      padding: 0;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 3px solid transparent;
+      background: #222;
+    }
+
+    .frame-choice.active {
+      border-color: #fff;
+    }
+
+    .frame-choice img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
     }
 
     .message {
       position: absolute;
       inset: 0;
-      z-index: 5;
+      z-index: 8;
       display: flex;
-      justify-content: center;
       align-items: center;
+      justify-content: center;
       padding: 24px;
-      color: #fff;
       text-align: center;
+      color: #fff;
       background: #111;
       line-height: 1.7;
     }
@@ -122,7 +172,7 @@
     #flash {
       position: absolute;
       inset: 0;
-      z-index: 4;
+      z-index: 7;
       background: #fff;
       opacity: 0;
       pointer-events: none;
@@ -133,28 +183,129 @@
       opacity: .9;
       transition: none;
     }
+
+    /* 撮影後プレビュー */
+    .preview-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      padding:
+        max(14px, env(safe-area-inset-top))
+        14px
+        max(16px, env(safe-area-inset-bottom));
+    }
+
+    .preview-screen.open {
+      display: flex;
+    }
+
+    .preview-image-wrap {
+      flex: 1 1 auto;
+      min-height: 0;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #previewImage {
+      display: block;
+      width: auto;
+      height: auto;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      aspect-ratio: 1080 / 1400;
+    }
+
+    .preview-buttons {
+      flex: 0 0 auto;
+      width: min(100%, 440px);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      padding-top: 14px;
+    }
+
+    .preview-btn {
+      appearance: none;
+      -webkit-appearance: none;
+      min-height: 54px;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    #retakeBtn {
+      border: 1px solid rgba(255,255,255,.55);
+      color: #fff;
+      background: #222;
+    }
+
+    #saveBtn {
+      border: 0;
+      color: #111;
+      background: #fff;
+    }
+
+    #downloadLink {
+      display: none;
+    }
   </style>
 </head>
+
 <body>
   <main class="app">
     <div class="stage">
       <video id="camera" autoplay playsinline muted></video>
-      <img id="frame" src="frame.png" alt="" />
-      <div id="flash"></div>
-    </div>
+      <img id="frame" src="frame1.png" alt="" />
 
-    <div class="ui">
-      <button id="switchBtn" type="button" aria-label="カメラ切り替え">↺</button>
-      <button id="shotBtn" type="button" aria-label="撮影"></button>
+      <div class="frame-picker" id="framePicker">
+        <button class="frame-choice active" data-frame="frame1.png" aria-label="フレーム1">
+          <img src="frame1.png" alt="">
+        </button>
+        <button class="frame-choice" data-frame="frame2.png" aria-label="フレーム2">
+          <img src="frame2.png" alt="">
+        </button>
+        <button class="frame-choice" data-frame="frame3.png" aria-label="フレーム3">
+          <img src="frame3.png" alt="">
+        </button>
+      </div>
+
+      <div class="controls">
+        <button id="framesBtn" class="circle-btn" type="button" aria-label="フレーム選択">▣</button>
+        <button id="shotBtn" class="circle-btn" type="button" aria-label="撮影"></button>
+        <button id="switchBtn" class="circle-btn" type="button" aria-label="カメラ切り替え">↺</button>
+      </div>
+
+      <div id="flash"></div>
+
+      <div id="message" class="message">
+        カメラを起動しています。<br>
+        初回はブラウザのカメラ使用を「許可」してください。
+      </div>
     </div>
 
     <a id="downloadLink"></a>
-
-    <div id="message" class="message">
-      カメラを起動しています。<br>
-      初回はブラウザのカメラ使用を「許可」してください。
-    </div>
   </main>
+
+  <!-- 撮影後の確認画面 -->
+  <section id="previewScreen" class="preview-screen" aria-hidden="true">
+    <div class="preview-image-wrap">
+      <img id="previewImage" alt="撮影した写真">
+    </div>
+
+    <div class="preview-buttons">
+      <button id="retakeBtn" class="preview-btn" type="button">撮り直す</button>
+      <button id="saveBtn" class="preview-btn" type="button">保存する</button>
+    </div>
+  </section>
 
   <canvas id="canvas" hidden></canvas>
 
@@ -162,18 +313,32 @@
     const video = document.getElementById("camera");
     const frame = document.getElementById("frame");
     const canvas = document.getElementById("canvas");
+
     const shotBtn = document.getElementById("shotBtn");
     const switchBtn = document.getElementById("switchBtn");
+    const framesBtn = document.getElementById("framesBtn");
+
+    const framePicker = document.getElementById("framePicker");
+    const frameChoices = document.querySelectorAll(".frame-choice");
+
     const message = document.getElementById("message");
     const flash = document.getElementById("flash");
     const downloadLink = document.getElementById("downloadLink");
 
+    const previewScreen = document.getElementById("previewScreen");
+    const previewImage = document.getElementById("previewImage");
+    const retakeBtn = document.getElementById("retakeBtn");
+    const saveBtn = document.getElementById("saveBtn");
+
     let stream = null;
     let facingMode = "environment";
+    let capturedBlob = null;
+    let capturedUrl = null;
 
     async function startCamera() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        message.innerHTML = "このブラウザではカメラを利用できません。<br>Safari / Chromeで開いてください。";
+        message.innerHTML =
+          "このブラウザではカメラを利用できません。<br>Safari / Chromeで開いてください。";
         return;
       }
 
@@ -195,15 +360,29 @@
         video.classList.toggle("mirror", facingMode === "user");
         await video.play();
         message.classList.add("hidden");
+
       } catch (err) {
         console.error(err);
         message.classList.remove("hidden");
         message.innerHTML =
           "カメラを起動できませんでした。<br>" +
-          "ブラウザの設定でカメラを許可してください。<br><br>" +
-          "※ HTTPSで公開されたページから開く必要があります。";
+          "ブラウザの設定でカメラを許可してください。";
       }
     }
+
+    framesBtn.addEventListener("click", () => {
+      framePicker.classList.toggle("open");
+    });
+
+    frameChoices.forEach(button => {
+      button.addEventListener("click", () => {
+        frame.src = button.dataset.frame;
+
+        frameChoices.forEach(b => b.classList.remove("active"));
+        button.classList.add("active");
+        framePicker.classList.remove("open");
+      });
+    });
 
     switchBtn.addEventListener("click", async () => {
       facingMode = facingMode === "environment" ? "user" : "environment";
@@ -220,33 +399,44 @@
 
       const vw = video.videoWidth;
       const vh = video.videoHeight;
-
-      const screenRatio = window.innerWidth / window.innerHeight;
+      const targetRatio = 1080 / 1400;
       const videoRatio = vw / vh;
 
-      let sx = 0, sy = 0, sw = vw, sh = vh;
+      let sx = 0;
+      let sy = 0;
+      let sw = vw;
+      let sh = vh;
 
-      if (videoRatio > screenRatio) {
-        sw = vh * screenRatio;
+      if (videoRatio > targetRatio) {
+        sw = vh * targetRatio;
         sx = (vw - sw) / 2;
       } else {
-        sh = vw / screenRatio;
+        sh = vw / targetRatio;
         sy = (vh - sh) / 2;
       }
 
-      canvas.width = Math.round(sw);
-      canvas.height = Math.round(sh);
+      canvas.width = 1080;
+      canvas.height = 1400;
 
       const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       if (facingMode === "user") {
         ctx.save();
         ctx.translate(canvas.width, 0);
         ctx.scale(-1, 1);
-        ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(
+          video,
+          sx, sy, sw, sh,
+          0, 0, canvas.width, canvas.height
+        );
         ctx.restore();
       } else {
-        ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(
+          video,
+          sx, sy, sw, sh,
+          0, 0, canvas.width, canvas.height
+        );
       }
 
       ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
@@ -254,20 +444,50 @@
       canvas.toBlob(blob => {
         if (!blob) return;
 
-        const url = URL.createObjectURL(blob);
-        const filename = `photo-${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
+        if (capturedUrl) {
+          URL.revokeObjectURL(capturedUrl);
+        }
 
-        downloadLink.href = url;
-        downloadLink.download = filename;
-        downloadLink.click();
+        capturedBlob = blob;
+        capturedUrl = URL.createObjectURL(blob);
 
-        setTimeout(() => URL.revokeObjectURL(url), 3000);
+        previewImage.src = capturedUrl;
+        previewScreen.classList.add("open");
+        previewScreen.setAttribute("aria-hidden", "false");
       }, "image/png");
+    });
+
+    retakeBtn.addEventListener("click", () => {
+      previewScreen.classList.remove("open");
+      previewScreen.setAttribute("aria-hidden", "true");
+
+      if (capturedUrl) {
+        URL.revokeObjectURL(capturedUrl);
+      }
+
+      capturedBlob = null;
+      capturedUrl = null;
+      previewImage.removeAttribute("src");
+    });
+
+    saveBtn.addEventListener("click", () => {
+      if (!capturedBlob || !capturedUrl) return;
+
+      const filename =
+        `photo-${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
+
+      downloadLink.href = capturedUrl;
+      downloadLink.download = filename;
+      downloadLink.click();
     });
 
     window.addEventListener("beforeunload", () => {
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
+      }
+
+      if (capturedUrl) {
+        URL.revokeObjectURL(capturedUrl);
       }
     });
 
