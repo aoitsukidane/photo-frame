@@ -476,9 +476,30 @@
       const filename =
         `photo-${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
 
+      // 「保存する」を押した瞬間にダウンロード開始
       downloadLink.href = capturedUrl;
       downloadLink.download = filename;
+      document.body.appendChild(downloadLink);
       downloadLink.click();
+
+      // ダウンロード操作後、すぐカメラ画面へ戻る
+      previewScreen.classList.remove("open");
+      previewScreen.setAttribute("aria-hidden", "true");
+
+      // 少し待ってから後片付け
+      setTimeout(() => {
+        if (downloadLink.parentNode) {
+          downloadLink.parentNode.removeChild(downloadLink);
+        }
+
+        if (capturedUrl) {
+          URL.revokeObjectURL(capturedUrl);
+        }
+
+        capturedBlob = null;
+        capturedUrl = null;
+        previewImage.removeAttribute("src");
+      }, 1000);
     });
 
     window.addEventListener("beforeunload", () => {
