@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
+  <meta name="robots" content="noindex, nofollow" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#000000" />
   <title>フォトフレームカメラ</title>
@@ -470,23 +471,62 @@
       previewImage.removeAttribute("src");
     });
 
-    saveBtn.addEventListener("click", () => {
+    saveBtn.addEventListener("click", async () => {
       if (!capturedBlob || !capturedUrl) return;
 
       const filename =
         `photo-${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
 
-      // 「保存する」を押した瞬間にダウンロード開始
+      const file = new File([capturedBlob], filename, { type: "image/png" });
+
+      // iPhone / iPad など、ファイル共有に対応している端末では
+      // 共有シートを開き「画像を保存」を選べるようにする
+      if (
+        navigator.share &&
+        navigator.canShare &&
+        navigator.canShare({ files: [file] })
+      ) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: "撮影した写真"
+          });
+
+          previewScreen.classList.remove("open");
+          previewScreen.setAttribute("aria-hidden", "true");
+
+          if (capturedUrl) {
+            URL.revokeObjectURL(capturedUrl);
+          }
+
+          capturedBlob = null;
+          capturedUrl = null;
+          previewImage.removeAttribute("src");
+          return;
+
+        } catch (err) {
+          // ユーザーが共有シートを閉じた場合は、そのままプレビュー画面に残す
+          if (err && err.name === "AbortError") {
+            return;
+          }
+
+          console.warn("共有に失敗したためダウンロードへ切り替えます", err);
+        }
+      }
+
+      // Android / PC / 共有未対応端末は従来通り直接ダウンロード
       downloadLink.href = capturedUrl;
       downloadLink.download = filename;
-      document.body.appendChild(downloadLink);
+
+      if (!downloadLink.parentNode) {
+        document.body.appendChild(downloadLink);
+      }
+
       downloadLink.click();
 
-      // ダウンロード操作後、すぐカメラ画面へ戻る
       previewScreen.classList.remove("open");
       previewScreen.setAttribute("aria-hidden", "true");
 
-      // 少し待ってから後片付け
       setTimeout(() => {
         if (downloadLink.parentNode) {
           downloadLink.parentNode.removeChild(downloadLink);
